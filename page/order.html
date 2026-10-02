@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2f4a35">
+  <title>Matcha Cih — Tiket Pesanan</title>
+  <meta name="description" content="Matcha Cih: racik matcha custom-mu sendiri, fresh di booth kampus.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍵</text></svg>">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <button class="back" onclick="location.href='../index.html'" aria-label="Beranda">‹</button>
+    <div class="brand"><span class="logo">🎫</span> Tiket Pesanan</div>
+    <span class="spacer"></span>
+    <button class="login-chip" id="loginChip" onclick="accountAction()">👤 <span id="loginLabel">Login</span></button>
+    <button class="mode-toggle" id="modeToggle" onclick="toggleViewMode()" aria-label="Ganti mode tampilan">
+      <span class="mt-ico">🖥️</span><span class="mt-label">Desktop Mode</span>
+    </button>
+  </div>
+
+  <div class="screen">
+    <div id="orderRoot">
+      <div class="empty"><div class="e-emoji">🎫</div><div>Memuat tiket…</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/data.js"></script>
+<script>
+(function () {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code') || Store.get('lastOrder', '');
+  const root = document.getElementById('orderRoot');
+
+  const STEPS = [
+    { key: 'received', title: '1. Pesanan Diterima', sub: 'Kami sudah terima pesananmu' },
+    { key: 'brewing',  title: '2. Sedang Di-whisk & Diseduh', sub: 'Barista lagi meracik matcha-mu' },
+    { key: 'ready',    title: '3. Siap Diambil di Booth!', sub: 'Ambil di meja pick-up' },
+    { key: 'done',     title: '4. Sudah Diambil', sub: 'Terima kasih, sampai jumpa lagi!' },
+  ];
+
+  function fmtDateTime(iso) {
+    if (!iso) return '';
+    const d = new Date(String(iso).replace(' ', 'T'));
+    if (isNaN(d)) return String(iso);
+    const tgl = d.toLocaleDateString('id-ID', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+    const jam = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    return tgl + ' · ' + jam;
+  }
+
+  if (!code) {
+    root.innerHTML = '<div class="empty"><div class="e-emoji">🤔</div><div>Tidak ada pesanan aktif.</div>' +
+      '<button class="btn btn-primary mt-12" onclick="location.href=\'lab.html\'">Racik Sekarang</button></div>';
+    return;
+  }
+
+  function render(order) {
+    const curIdx = STEPS.findIndex(s => s.key === order.status);
+    const isReady = order.status === 'ready';
+    const isDone = order.status === 'done';
+    const pickedAt = fmtDateTime(order.collectedAt);
+
+    const items = order.cart.map(it => `
+      <div class="cart-line" style="border:none;padding:4px 0">
+        <span class="c-name">${escapeHtml(it.recipeName)}</span>
+        <span class="c-val">${IDR(it.price)}</span>
+      </div>`).join('');
+
+    const track = STEPS.map((s, i) => {
+      let cls = '';
+      if (i < curIdx) cls = 'done';
+      else if (i === curIdx) cls = 'active';
+      const icon = i < curIdx ? '✓' : (i + 1);
+      let sub = s.sub;
+      if (s.key === 'done' && isDone && pickedAt) {
+        sub = '🕒 Diambil ' + escapeHtml(pickedAt);
+      }
+      return `<div class="track-step ${cls}">
+        <div class="dot-wrap"><div class="dot">${icon}</div><div class="bar"></div></div>
+        <div class="t-body"><div class="t-step-title">${s.title}</div><div class="t-step-sub">${sub}</div></div>
+      </div>`;
+    }).join('');
+
+    root.innerHTML = `
+     <div class="order-split">
+      <div class="ticket-col">
+        <div class="ticket">
+          <span class="notch l"></span><span class="notch r"></span>
+          <div class="t-label">Kode Tiket</div>
+          <div class="t-code">#${escapeHtml(order.code)}</div>
+          <div class="t-name">${escapeHtml(order.nick)} · ${order.cart.length} item · ${IDR(order.total)}</div>
+        </div>
+
+        <div class="tracker">
+          <div class="step-track">${track}</div>
+        </div>
+
+        <div class="pickup-note">
+          ${isDone
+            ? '✅ <strong>Pesanan sudah diambil.</strong>' + (pickedAt ? '<br>🕒 ' + escapeHtml(pickedAt) : '') + '<br>Terima kasih sudah memesan di Matcha Cih!'
+            : (isReady
+              ? '🟢 <strong>Pesanan siap!</strong> Tunjukkan layar ini ke meja pick-up saat nomor <strong>#' + escapeHtml(order.code) + '</strong> dipanggil.'
+              : 'Tunjukkan layar ini ke meja pick-up saat nomor <strong>#' + escapeHtml(order.code) + '</strong> dipanggil atau status berubah hijau.')}
+        </div>
+      </div>
+
+      <div class="detail-col">
+        <h2 class="section" style="margin-top:0">Rincian</h2>
+        <div class="card">${items}
+          <div class="cart-total"><span>Total</span><span>${IDR(order.total)}</span></div>
+          ${order.note ? '<div class="sub mt-12">📝 ' + escapeHtml(order.note) + '</div>' : ''}
+        </div>
+      </div>
+
+      <div class="order-actions">
+        <button class="btn btn-ghost btn-block mt-16" onclick="location.href='history.html'">🧾 Lihat Riwayat Pembelian</button>
+        <button class="btn btn-ghost btn-block mt-8" onclick="location.href='support.html'">💬 Tanya Customer Service</button>
+        <button class="btn btn-ghost btn-block mt-8" onclick="location.href='../index.html'">Kembali ke Beranda</button>
+        <p class="sub center mt-8" style="font-size:12px">Status diperbarui otomatis oleh petugas booth.</p>
+      </div>
+     </div>
+    `;
+  }
+
+  function load() {
+    const res = MatchaAPI.Order.status(code);
+    if (!res.ok) {
+      root.innerHTML = '<div class="empty"><div class="e-emoji">⚠️</div><div>' + escapeHtml(res.error || 'Pesanan tidak ditemukan') + '</div></div>';
+      return;
+    }
+    render(res.order);
+  }
+
+  // Live polling — auto-refresh the tracker every 5s sampai pesanan diambil
+  let poll = setInterval(() => {
+    const res = MatchaAPI.Order.status(code);
+    if (res.ok) {
+      render(res.order);
+      if (res.order.status === 'done') clearInterval(poll);
+    }
+  }, 5000);
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>

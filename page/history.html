@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2f4a35">
+  <title>Matcha Cih — Riwayat Pembelian</title>
+  <meta name="description" content="Matcha Cih: racik matcha custom-mu sendiri, fresh di booth kampus.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍵</text></svg>">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <button class="back" onclick="location.href='../index.html'" aria-label="Kembali">‹</button>
+    <div class="brand"><img class="logo" src="../logomatcha.jpeg" alt="Logo Matcha Cih"> Riwayat Pembelian</div>
+    <span class="spacer"></span>
+    <button class="login-chip" id="loginChip" onclick="accountAction()">👤 <span id="loginLabel">Login</span></button>
+    <button class="mode-toggle" id="modeToggle" onclick="toggleViewMode()" aria-label="Ganti mode tampilan">
+      <span class="mt-ico">🖥️</span><span class="mt-label">Desktop Mode</span>
+    </button>
+    <button class="cart-chip" onclick="location.href='cart.html'">🛒 <span id="cartCount">0</span></button>
+  </div>
+
+  <div class="screen">
+    <p class="eyebrow">Jejak Pesananmu</p>
+    <h1 class="title">Riwayat Pembelian</h1>
+    <p class="sub mt-8">Daftar matcha yang pernah kamu pesan dari perangkat ini, lengkap dengan waktu &amp; status. Buka tiket sebagai bukti pengambilan.</p>
+
+    <div class="order-grid mt-16" id="histList">
+      <div class="admin-empty"><div class="e-emoji">🍵</div><div>Memuat riwayat…</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/data.js"></script>
+<script>
+(function () {
+  document.getElementById('cartCount').textContent = Store.get('cart', []).length;
+
+  const STATUS_LABEL = { received: 'Diterima', brewing: 'Diseduh', ready: 'Siap Diambil', done: 'Sudah Diambil' };
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function fmt(iso) {
+    if (!iso) return '';
+    const d = new Date(String(iso).replace(' ', 'T'));
+    if (isNaN(d)) return esc(iso);
+    return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  const wrap = document.getElementById('histList');
+  const codes = Store.get('history', []);
+
+  if (!codes.length) {
+    wrap.className = '';
+    wrap.innerHTML = '<div class="admin-empty"><div class="e-emoji">🌱</div>' +
+      '<div>Belum ada pembelian dari perangkat ini.</div>' +
+      '<button class="btn btn-primary mt-16" onclick="location.href=\'lab.html\'">Mulai Meracik</button></div>';
+    return;
+  }
+
+  const res = MatchaAPI.Order.history(codes);
+  if (!res.ok || !res.orders || !res.orders.length) {
+    wrap.className = '';
+    wrap.innerHTML = '<div class="admin-empty"><div class="e-emoji">🌱</div><div>Riwayat tidak ditemukan (mungkin sudah dihapus admin).</div></div>';
+    return;
+  }
+
+  // Sinkronkan kembali daftar kode yang masih valid ke localStorage.
+  Store.set('history', res.orders.map(o => o.code));
+
+  wrap.innerHTML = res.orders.map(o => {
+    const items = o.cart.map(it =>
+      `<div class="oc-item"><span class="n">${esc(it.recipeName)}</span><span>${IDR(it.price)}</span></div>`
+    ).join('');
+    const collected = (o.status === 'done' && o.collectedAt)
+      ? `<div class="oc-ing" style="color:var(--forest)">✅ Diambil ${esc(fmt(o.collectedAt))}</div>` : '';
+    return `
+      <div class="order-card">
+        <div class="oc-head">
+          <span class="oc-code">#${esc(o.code)}</span>
+          <span class="status-pill ${o.status}">${STATUS_LABEL[o.status] || o.status}</span>
+          <span class="oc-time">${esc(fmt(o.createdAt))}</span>
+        </div>
+        <div class="oc-items mt-8">${items}</div>
+        ${collected}
+        <div class="oc-foot">
+          <span class="oc-total">${IDR(o.total)}</span>
+          <button class="btn btn-primary" style="margin-left:auto" onclick="location.href='order.html?code=${encodeURIComponent(o.code)}'">Lihat Tiket →</button>
+        </div>
+      </div>`;
+  }).join('');
+})();
+</script>
+</body>
+</html>

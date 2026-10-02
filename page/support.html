@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2f4a35">
+  <title>Matcha Cih — Bantuan</title>
+  <meta name="description" content="Matcha Cih: racik matcha custom-mu sendiri, fresh di booth kampus.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍵</text></svg>">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <button class="back" onclick="location.href='../index.html'" aria-label="Kembali">‹</button>
+    <div class="brand"><img class="logo" src="../logomatcha.jpeg" alt="Logo Matcha Cih"> Bantuan</div>
+    <span class="spacer"></span>
+    <button class="login-chip" id="loginChip" onclick="accountAction()">👤 <span id="loginLabel">Login</span></button>
+    <button class="mode-toggle" id="modeToggle" onclick="toggleViewMode()" aria-label="Ganti mode tampilan">
+      <span class="mt-ico">🖥️</span><span class="mt-label">Desktop Mode</span>
+    </button>
+  </div>
+
+  <div class="screen has-footer">
+    <p class="eyebrow">Customer Service</p>
+    <h1 class="title">Ada yang bisa kami bantu?</h1>
+    <p class="sub mt-8">Pilih salah satu pertanyaan di bawah, admin booth akan membalas di sini. <span id="guestTag" class="tag hidden"></span></p>
+
+    <!-- Percakapan -->
+    <div class="cs-chat" id="csChat">
+      <div class="cs-empty" id="csEmpty">
+        <div class="e-emoji">💬</div>
+        <div>Belum ada percakapan. Pilih pertanyaan di bawah untuk memulai.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pilihan pertanyaan (preset) -->
+  <div class="footer-bar cs-ask">
+    <div class="cs-presets" id="csPresets"></div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/data.js"></script>
+<script>
+(function () {
+  // Token guest unik per perangkat (disimpan di localStorage).
+  let token = Store.get('csToken', null);
+  if (!token) {
+    token = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    Store.set('csToken', token);
+  }
+
+  // Kode order terbaru (kalau ada) dari riwayat perangkat.
+  const history = Store.get('history', []);
+  const lastCode = history.length ? history[0] : (Store.get('lastOrder', '') || '');
+
+  const PRESETS = [
+    { key: 'q1', label: 'Bagaimana dengan Matcha saya' + (lastCode ? ' (#' + lastCode + ')' : ''), withCode: true },
+    { key: 'q2', label: 'Apakah saya sudah bisa mengambil Matcha saya sekarang?', withCode: true },
+    { key: 'q3', label: 'Sedang di order keberapa kak?', withCode: false },
+  ];
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function fmt(iso) {
+    if (!iso) return '';
+    const d = new Date(String(iso).replace(' ', 'T'));
+    if (isNaN(d)) return '';
+    return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function renderPresets() {
+    document.getElementById('csPresets').innerHTML = PRESETS.map(p =>
+      `<button class="cs-preset" data-k="${p.key}">${esc(p.label)}</button>`
+    ).join('');
+    document.querySelectorAll('.cs-preset').forEach(b => {
+      b.onclick = () => ask(PRESETS.find(x => x.key === b.dataset.k));
+    });
+  }
+
+  function renderMessages(messages, guestName) {
+    const chat = document.getElementById('csChat');
+    if (guestName) {
+      const tag = document.getElementById('guestTag');
+      tag.textContent = 'Kamu: ' + guestName;
+      tag.classList.remove('hidden');
+    }
+    if (!messages || !messages.length) return;
+    chat.innerHTML = messages.map(m => `
+      <div class="cs-bubble ${m.sender === 'admin' ? 'from-admin' : 'from-user'}">
+        <div class="cs-body">${esc(m.body)}</div>
+        <div class="cs-time">${m.sender === 'admin' ? 'Admin · ' : ''}${esc(fmt(m.createdAt))}</div>
+      </div>`).join('');
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function ask(preset) {
+    if (!preset) return;
+    document.querySelectorAll('.cs-preset').forEach(b => b.disabled = true);
+    const res = MatchaAPI.Support.ask(token, preset.label, preset.withCode ? lastCode : '');
+    document.querySelectorAll('.cs-preset').forEach(b => b.disabled = false);
+    if (!res.ok) { showToast(res.error || 'Gagal mengirim'); return; }
+    renderMessages(res.messages, res.guestName);
+    showToast('Pertanyaan terkirim ✓');
+  }
+
+  function poll() {
+    const res = MatchaAPI.Support.poll(token);
+    if (res.ok) renderMessages(res.messages, res.guestName);
+  }
+
+  renderPresets();
+  poll();
+  setInterval(poll, 5000); // cek balasan admin tiap 5 detik
+})();
+</script>
+</body>
+</html>

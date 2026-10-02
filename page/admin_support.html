@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2f4a35">
+  <title>Matcha Cih — CS Admin</title>
+  <meta name="description" content="Matcha Cih: customer service admin.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍵</text></svg>">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <button class="back" onclick="location.href='admin.html'" aria-label="Kembali ke dashboard">‹</button>
+    <div class="brand"><span class="logo">💬</span> CS Admin</div>
+    <span class="spacer"></span>
+    <button class="login-chip is-user" id="loginChip" onclick="accountAction()">👤 <span id="loginLabel">admin</span></button>
+    <button class="mode-toggle" id="modeToggle" onclick="toggleViewMode()" aria-label="Ganti mode tampilan">
+      <span class="mt-ico">🖥️</span><span class="mt-label">Desktop Mode</span>
+    </button>
+  </div>
+
+  <div class="screen">
+    <div id="csRoot">
+      <div class="admin-empty"><div class="e-emoji">🔐</div><div>Memeriksa akses…</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/data.js"></script>
+<script>
+(function () {
+  let activeId = null;
+  let pollTimer = null;
+  const urlCode = new URLSearchParams(location.search).get('code') || '';
+
+  const QUICK_REPLIES = [
+    'Matchanya sedang di siapkan kak',
+    'Sedang take order Matcha {kode}',
+    'Sebentar lagi yaa kak',
+    'Kak Matchanya {kode} sudah ready!',
+  ];
+
+  function codeFromMessages(messages) {
+    for (const m of messages) {
+      const mt = String(m.body).match(/Order #([A-Za-z]-?\d+)/);
+      if (mt) return mt[1];
+    }
+    return urlCode || '';
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function fmt(iso) {
+    if (!iso) return '';
+    const d = new Date(String(iso).replace(' ', 'T'));
+    if (isNaN(d)) return '';
+    return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Cek akses admin.
+  const who = MatchaAPI.Auth.whoami();
+  if (!who.ok || !who.user || who.user.role !== 'admin') {
+    document.getElementById('csRoot').innerHTML =
+      '<div class="admin-empty"><div class="e-emoji">🔒</div><div>Khusus admin.</div>' +
+      '<button class="btn btn-primary mt-16" onclick="location.href=\'login.html?next=admin_support.html\'">Login sebagai Admin</button></div>';
+  } else {
+    document.getElementById('loginLabel').textContent = who.user.username;
+    renderShell();
+    loadThreads();
+    pollTimer = setInterval(() => { loadThreads(); if (activeId) loadThread(activeId, true); }, 5000);
+  }
+
+  function renderShell() {
+    document.getElementById('csRoot').innerHTML = `
+      <h1 class="title" style="font-size:22px">Customer Service</h1>
+      <p class="sub mt-8">Pesan dari pengunjung. Pilih percakapan lalu balas. Refresh otomatis tiap 5 detik.</p>
+      <div class="cs-admin mt-16">
+        <div class="cs-threads" id="csThreads"><div class="cs-empty"><div>Memuat…</div></div></div>
+        <div class="cs-panel" id="csPanel">
+          <div class="cs-empty"><div class="e-emoji">👈</div><div>Pilih percakapan di kiri.</div></div>
+        </div>
+      </div>`;
+  }
+
+  function loadThreads() {
+    const res = MatchaAPI.Support.list();
+    if (!res.ok) return;
+    const wrap = document.getElementById('csThreads');
+    if (!wrap) return;
+    if (!res.threads.length) {
+      wrap.innerHTML = '<div class="cs-empty"><div>Belum ada percakapan.</div></div>';
+      return;
+    }
+    wrap.innerHTML = res.threads.map(t => `
+      <button class="cs-thread ${t.id === activeId ? 'active' : ''}" data-id="${t.id}">
+        <div class="cs-th-top">
+          <span class="cs-th-name">${esc(t.guestName)}</span>
+          <span class="cs-th-time">${esc(fmt(t.lastAt))}</span>
+        </div>
+        <div class="cs-th-last">${t.lastSender === 'admin' ? '↩︎ ' : ''}${esc(t.lastBody || '')}</div>
+      </button>`).join('');
+    wrap.querySelectorAll('.cs-thread').forEach(b => {
+      b.onclick = () => { activeId = +b.dataset.id; loadThreads(); loadThread(activeId); };
+    });
+  }
+
+  function loadThread(id, keepScroll) {
+    const res = MatchaAPI.Support.thread(id);
+    if (!res.ok) return;
+    renderPanel(id, res.guestName, res.messages, keepScroll);
+  }
+
+  function renderPanel(id, guestName, messages, keepScroll) {
+    const panel = document.getElementById('csPanel');
+    if (!panel) return;
+    const prevScroll = keepScroll ? (panel.querySelector('.cs-msgs')?.scrollTop || 0) : null;
+
+    const bubbles = messages.map(m => `
+      <div class="cs-bubble ${m.sender === 'admin' ? 'from-admin' : 'from-user'}">
+        <div class="cs-body">${esc(m.body)}</div>
+        <div class="cs-time">${m.sender === 'admin' ? 'Admin · ' : esc(guestName) + ' · '}${esc(fmt(m.createdAt))}</div>
+      </div>`).join('');
+
+    const code = codeFromMessages(messages);
+    const quickChips = QUICK_REPLIES.map((q, i) => {
+      const text = q.replace('{kode}', code ? ('#' + code) : '').replace(/\s+/g, ' ').trim();
+      return `<button class="cs-quick" data-q="${i}" title="Isi balasan cepat">${esc(text)}</button>`;
+    }).join('');
+
+    panel.innerHTML = `
+      <div class="cs-panel-head">${esc(guestName)}</div>
+      <div class="cs-msgs" id="csMsgs">${bubbles}</div>
+      <div class="cs-quick-row">${quickChips}</div>
+      <div class="cs-reply">
+        <input type="text" id="csReplyInput" placeholder="Ketik balasan…" maxlength="500" autocomplete="off">
+        <button class="btn btn-primary" id="csReplyBtn">Kirim</button>
+      </div>`;
+
+    const msgs = document.getElementById('csMsgs');
+    if (msgs) msgs.scrollTop = (prevScroll !== null) ? prevScroll : msgs.scrollHeight;
+
+    const input = document.getElementById('csReplyInput');
+
+    panel.querySelectorAll('.cs-quick').forEach(chip => {
+      chip.onclick = () => {
+        const q = QUICK_REPLIES[+chip.dataset.q].replace('{kode}', code ? ('#' + code) : '').replace(/\s+/g, ' ').trim();
+        input.value = q;
+        input.focus();
+      };
+    });
+    const send = () => {
+      const body = input.value.trim();
+      if (!body) return;
+      input.disabled = true;
+      const res = MatchaAPI.Support.reply(id, body);
+      input.disabled = false;
+      if (!res.ok) { showToast(res.error || 'Gagal'); return; }
+      input.value = '';
+      renderPanel(id, guestName, res.messages, false);
+      loadThreads();
+    };
+    document.getElementById('csReplyBtn').onclick = send;
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+    input.focus();
+  }
+})();
+</script>
+</body>
+</html>

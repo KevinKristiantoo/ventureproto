@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2f4a35">
+  <title>Matcha Cih — Racik Matcha-mu</title>
+  <meta name="description" content="Matcha Cih: racik matcha custom-mu sendiri, fresh di booth kampus. Interactive cup, taste profile, dan resep yang bisa di-share.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍵</text></svg>">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <button class="back" onclick="location.href='../index.html'" aria-label="Kembali">‹</button>
+    <div class="brand"><span class="logo">🧪</span> Custom Lab</div>
+    <span class="spacer"></span>
+    <button class="login-chip" id="loginChip" onclick="accountAction()">👤 <span id="loginLabel">Login</span></button>
+    <button class="mode-toggle" id="modeToggle" onclick="toggleViewMode()" aria-label="Ganti mode tampilan">
+      <span class="mt-ico">🖥️</span><span class="mt-label">Desktop Mode</span>
+    </button>
+    <button class="cart-chip" onclick="location.href='cart.html'">🛒 <span id="cartCount">0</span></button>
+  </div>
+
+  <div class="screen has-footer desktop-split">
+
+   <div class="pane-left">
+    <!-- ============ Interactive Dynamic Cup ============ -->
+    <div class="cup-stage">
+      <p class="eyebrow cup-eyebrow">Matcha Lab · Live Preview</p>
+      <div class="cup" id="cup">
+        <span class="straw"></span>
+        <!-- tangan + whisk yang muncul saat mengaduk -->
+        <div class="stir-hand" id="cupHand" aria-hidden="true">
+          <div class="hand"></div>
+          <div class="whisk"></div>
+        </div>
+        <div class="glass">
+          <div class="jelly" id="cupJelly"><span></span><span></span><span></span></div>
+          <div class="liquid" id="cupLiquid"></div>
+          <!-- es batu: jumlah diatur JS (3 = normal, 2 = less) -->
+          <div class="ice" id="cupIce" aria-hidden="true">
+            <span class="cube c1"></span>
+            <span class="cube c2"></span>
+            <span class="cube c3"></span>
+          </div>
+          <div class="foam" id="cupFoam"></div>
+          <!-- overlay animasi: di dalam glass tapi TERPISAH dari liquid -->
+          <span class="swirl" id="cupSwirl" aria-hidden="true"></span>
+          <span class="blend" id="cupBlend" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="cup-caption">
+        <span id="cupName">Balanced Matcha</span>
+        <small id="cupSub">Fresh Milk · Normal Sugar</small>
+      </div>
+    </div>
+
+   </div><!-- /pane-left -->
+
+   <div class="pane-right">
+    <!-- ============ Stepper ============ -->
+    <!-- Step 1 -->
+    <div class="step" style="margin-top:0">
+      <div class="step-head"><span class="step-num">1</span><span class="step-title">Pilihan Susu / Base</span></div>
+      <div class="opt-grid" id="optBase"></div>
+    </div>
+    <!-- Step 2 -->
+    <div class="step">
+      <div class="step-head"><span class="step-num">2</span><span class="step-title">Pilihan Es</span></div>
+      <div class="opt-grid cols-2" id="optIce"></div>
+    </div>
+
+    <!-- Share recipe -->
+    <button class="btn btn-ghost btn-block mt-16" id="btnName">✏️ Beri Nama &amp; Share Resepmu</button>
+   </div><!-- /pane-right -->
+  </div>
+
+  <!-- Sticky footer -->
+  <div class="footer-bar">
+    <div>
+      <div class="total-label">Total <span id="cartHint" class="cart-hint hidden"></span></div>
+      <div class="total-val" id="footerTotal">Rp 22.000</div>
+    </div>
+    <button class="btn btn-ghost btn-lg" id="btnAddMore">+ Racik Lagi</button>
+    <button class="btn btn-primary btn-lg" id="btnAdd">Lanjut ke Pesanan</button>
+  </div>
+</div>
+
+<!-- Name / share modal -->
+<div class="modal-backdrop" id="shareModal">
+  <div class="modal">
+    <h3>Beri Nama Resepmu 🍵</h3>
+    <p class="sub">Simpan racikan ini, dapat link unik buat dibagikan ke grup kelas. <span class="tag">#MatchaID</span></p>
+    <div class="field">
+      <label>Nama Resep</label>
+      <input type="text" id="recipeName" placeholder="cth: Matcha Santai ala Sarah" maxlength="60">
+    </div>
+    <div class="field">
+      <label>Nama Kamu</label>
+      <input type="text" id="recipeAuthor" placeholder="cth: Sarah" maxlength="40">
+    </div>
+
+    <div id="shareResult" class="hidden">
+      <div class="share-link">
+        <input type="text" id="shareUrl" readonly>
+        <button class="btn btn-primary" id="btnCopy">Salin</button>
+      </div>
+      <div class="share-actions">
+        <a class="btn btn-forest" id="btnWa" target="_blank" rel="noopener">Kirim WhatsApp</a>
+        <button class="btn btn-ghost" id="btnCloseShare">Selesai</button>
+      </div>
+    </div>
+
+    <div class="share-actions" id="shareButtons">
+      <button class="btn btn-ghost" id="btnCancelShare">Batal</button>
+      <button class="btn btn-primary" id="btnDoShare">Buat Link</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/lab.js"></script>
+</body>
+</html>
