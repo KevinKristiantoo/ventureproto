@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2f4a35">
+  <title>Matcha Cih — Racik Matcha-mu</title>
+  <meta name="description" content="Matcha Cih: racik matcha custom-mu sendiri, fresh di booth kampus. Interactive cup, taste profile, dan resep yang bisa di-share.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍵</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@600;700;800;900&display=swap">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <button class="back" onclick="location.href='lab.html'" aria-label="Kembali">‹</button>
+    <div class="brand"><span class="logo">🍵</span> Checkout Matcha-mu</div>
+    <span class="spacer"></span>
+    <button class="login-chip" id="loginChip" onclick="accountAction()">👤 <span id="loginLabel">Login</span></button>
+    <button class="mode-toggle" id="modeToggle" onclick="toggleViewMode()" aria-label="Ganti mode tampilan">
+      <span class="mt-ico">🖥️</span><span class="mt-label">Desktop Mode</span>
+    </button>
+  </div>
+
+  <div class="screen has-footer cart-split">
+
+   <div class="order-col">
+    <!-- Order details -->
+    <section class="panel">
+      <div class="panel-head"><span class="panel-ico">🧾</span><h2 class="panel-title">Rincian Pesanan</h2></div>
+      <div class="panel-body" id="cartCard">
+        <div class="empty"><div class="e-emoji">🍵</div><div>Keranjang masih kosong.</div>
+          <button class="btn btn-primary mt-12" onclick="location.href='lab.html'">Mulai Meracik</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick form -->
+    <section class="panel">
+      <div class="panel-head"><span class="panel-ico">🙋</span><h2 class="panel-title">Data Kamu</h2></div>
+      <div class="panel-body">
+        <div class="field">
+          <label for="nick">Nama Panggilan</label>
+          <input type="text" id="nick" placeholder="cth: Sarah" maxlength="40" autocomplete="given-name">
+        </div>
+        <div class="field">
+          <label for="wa">Nomor WhatsApp</label>
+          <input type="tel" id="wa" placeholder="cth: 0812xxxxxxx" maxlength="20" inputmode="numeric" autocomplete="tel">
+          <p class="sub mt-8">Buat notifikasi kalau pesanan sudah jadi.</p>
+        </div>
+        <div class="field">
+          <label for="note">Catatan Khusus (opsional)</label>
+          <textarea id="note" rows="2" placeholder="cth: es dikit aja ya" maxlength="200"></textarea>
+        </div>
+      </div>
+    </section>
+   </div><!-- /order-col -->
+
+   <div class="pay-col">
+    <!-- Payment -->
+    <section class="panel">
+      <div class="panel-head"><span class="panel-ico">💳</span><h2 class="panel-title">Metode Bayar</h2></div>
+      <div class="panel-body">
+        <div class="qris">
+          <p class="eyebrow">Scan QRIS</p>
+          <div class="qr" aria-label="Kode QRIS"></div>
+          <div class="sub">Bayar <strong id="qrisAmount">Rp 0</strong> — berlaku semua e-wallet &amp; bank</div>
+          <div class="pay-logos">
+            <span>GoPay</span><span>OVO</span><span>ShopeePay</span><span>BCA</span><span>Livin</span>
+          </div>
+        </div>
+        <p class="sub center mt-12">Tekan "Pesan Sekarang" setelah scan QRIS di aplikasi bank/e-wallet kamu.</p>
+      </div>
+    </section>
+   </div><!-- /pay-col -->
+  </div>
+
+  <!-- Sticky footer -->
+  <div class="footer-bar">
+    <div>
+      <div class="total-label">Total Bayar</div>
+      <div class="total-val" id="footerTotal">Rp 0</div>
+    </div>
+    <button class="btn btn-primary btn-lg" id="btnPay">🍵 Pesan Sekarang</button>
+  </div>
+</div>
+
+<script src="assets/js/store-api.js"></script>
+<script src="assets/js/data.js"></script>
+<script>
+(function () {
+  let cart = Store.get('cart', []);
+
+  function total() { return cart.reduce((s, x) => s + (x.price || 0), 0); }
+
+  function renderCart() {
+    const card = document.getElementById('cartCard');
+    if (!cart.length) {
+      card.innerHTML = '<div class="empty"><div class="e-emoji">🍵</div><div>Keranjang masih kosong.</div>' +
+        '<button class="btn btn-primary mt-12" onclick="location.href=\'lab.html\'">Mulai Meracik</button></div>';
+      document.getElementById('footerTotal').textContent = IDR(0);
+      document.getElementById('qrisAmount').textContent = IDR(0);
+      document.getElementById('btnPay').disabled = true;
+      document.getElementById('btnPay').style.opacity = .5;
+      return;
+    }
+
+    card.innerHTML = '';
+    cart.forEach((item, idx) => {
+      const block = document.createElement('div');
+      block.className = 'cart-item';
+      block.innerHTML = `
+        <div class="ci-top">
+          <span class="ci-name">${escapeHtml(item.recipeName)}</span>
+          <span class="ci-price">${IDR(item.price)}</span>
+        </div>
+        <div class="ci-ingr">${item.ingredients.map(escapeHtml).join(' · ')}</div>
+        <button data-i="${idx}" class="rm" aria-label="Hapus item">🗑 Hapus</button>`;
+      card.appendChild(block);
+    });
+
+    const t = document.createElement('div');
+    t.className = 'cart-total';
+    t.innerHTML = `<span>Total (${cart.length} item)</span><span>${IDR(total())}</span>`;
+    card.appendChild(t);
+
+    card.querySelectorAll('.rm').forEach(btn => {
+      btn.onclick = () => {
+        cart.splice(+btn.dataset.i, 1);
+        Store.set('cart', cart);
+        renderCart();
+        showToast('Item dihapus');
+      };
+    });
+
+    document.getElementById('footerTotal').textContent = IDR(total());
+    document.getElementById('qrisAmount').textContent = IDR(total());
+    document.getElementById('btnPay').disabled = false;
+    document.getElementById('btnPay').style.opacity = 1;
+  }
+
+  document.getElementById('btnPay').onclick = () => {
+    if (!cart.length) return;
+    const nick = document.getElementById('nick').value.trim();
+    const wa = document.getElementById('wa').value.trim();
+    if (!nick) { showToast('Isi nama panggilan dulu ya'); document.getElementById('nick').focus(); return; }
+    if (!wa) { showToast('Isi nomor WhatsApp dulu ya'); document.getElementById('wa').focus(); return; }
+
+    const btn = document.getElementById('btnPay');
+    btn.disabled = true; btn.textContent = 'Memproses…';
+
+    fetch('api/order.php?action=create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nick, whatsapp: wa,
+        note: document.getElementById('note').value.trim(),
+        cart, total: total(),
+      }),
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (!res.ok) { showToast(res.error || 'Gagal membuat pesanan'); btn.disabled = false; btn.textContent = '🍵 Pesan Sekarang'; return; }
+        Store.set('cart', []);         // clear cart
+        Store.set('lastOrder', res.code);
+        // Simpan ke riwayat pembelian perangkat ini (kode terbaru di depan).
+        const hist = Store.get('history', []);
+        if (!hist.includes(res.code)) hist.unshift(res.code);
+        Store.set('history', hist.slice(0, 100));
+        location.href = 'order.html?code=' + encodeURIComponent(res.code);
+      })
+      .catch(() => { showToast('Server tidak merespons'); btn.disabled = false; btn.textContent = '🍵 Pesan Sekarang'; });
+  };
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  renderCart();
+})();
+</script>
+</body>
+</html>

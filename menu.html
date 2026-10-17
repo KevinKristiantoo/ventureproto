@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2f4a35">
+  <title>Matcha Cih — Racik Matcha-mu</title>
+  <meta name="description" content="Matcha Cih: racik matcha custom-mu sendiri, fresh di booth kampus. Interactive cup, taste profile, dan resep yang bisa di-share.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍵</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@600;700;800;900&display=swap">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <button class="back" onclick="location.href='index.html'" aria-label="Kembali">‹</button>
+    <div class="brand"><img class="logo" src="logomatcha.jpeg" alt="Logo Matcha Cih"> Menu Utama</div>
+    <span class="spacer"></span>
+    <button class="login-chip" id="loginChip" onclick="accountAction()">👤 <span id="loginLabel">Login</span></button>
+    <button class="mode-toggle" id="modeToggle" onclick="toggleViewMode()" aria-label="Ganti mode tampilan">
+      <span class="mt-ico">🖥️</span><span class="mt-label">Desktop Mode</span>
+    </button>
+    <button class="cart-chip" onclick="location.href='cart.html'">🛒 <span id="cartCount">0</span></button>
+  </div>
+
+  <div class="screen">
+    <p class="eyebrow">Menu Rekomendasi</p>
+    <h1 class="title">Pilih Menu Utama</h1>
+    <p class="sub mt-8">Tiga racikan andalan siap saji. Pilih satu, lalu langsung tambah ke pesanan atau ubah sesukamu.</p>
+
+    <div class="menu-choice mt-16" id="menuList">
+      <div class="empty"><div class="e-emoji">🍵</div><div>Memuat menu…</div></div>
+    </div>
+
+    <!-- Racik sendiri dari nol -->
+    <button class="custom-cta mt-16" onclick="goCustom()">
+      <span class="cc-ico">🧪</span>
+      <span class="cc-text">
+        <span class="cc-title">Kustom Matcha</span>
+        <span class="cc-desc">Racik sendiri dari nol — atur susu, gula &amp; es sesukamu</span>
+      </span>
+      <span class="cc-arrow">→</span>
+    </button>
+  </div>
+</div>
+
+<script src="assets/js/store-api.js"></script>
+<script src="assets/js/data.js"></script>
+<script>
+  // Kustom Matcha: buka Lab dengan racikan kosong (mulai dari nol).
+  function goCustom() {
+    Store.del('build');
+    Store.del('buildName');
+    location.href = 'lab.html';
+  }
+  window.goCustom = goCustom;
+
+(function () {
+  document.getElementById('cartCount').textContent = Store.get('cart', []).length;
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  fetch('api/recipe.php?action=popular')
+    .then(r => r.json())
+    .then(res => {
+      const wrap = document.getElementById('menuList');
+      if (!res.ok || !res.recipes || !res.recipes.length) {
+        wrap.innerHTML = '<div class="empty"><div class="e-emoji">🌱</div><div>Menu belum tersedia.</div></div>';
+        return;
+      }
+      wrap.innerHTML = '';
+      res.recipes.forEach(rec => {
+        const b = computeBuild(rec.config);
+        const card = document.createElement('div');
+        card.className = 'menu-card card';
+        // Gambar menu = nama menu (sama seperti index.html). Matcha Latte .webp, lainnya .jpg.
+        const ext = rec.name === 'Matcha Latte' ? 'webp' : 'jpg';
+        const img = encodeURIComponent(rec.name) + '.' + ext;
+        const slug = rec.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        card.innerHTML = `
+          <img class="mc-photo" data-menu="${slug}" src="${img}" alt="${esc(rec.name)}"
+               onerror="this.classList.add('mc-photo-fallback');this.removeAttribute('src')">
+          <div class="menu-info">
+            <div class="mc-name">${esc(rec.name)}</div>
+            <div class="mc-foot">
+              <span class="mc-price">${IDR(b.price)}</span>
+              <button class="btn btn-primary mc-pick">Pilih Menu Ini →</button>
+            </div>
+          </div>`;
+        card.querySelector('.mc-pick').onclick = () => {
+          Store.set('build', rec.config);
+          Store.set('buildName', rec.name);
+          location.href = 'lab.html?loaded=1';
+        };
+        wrap.appendChild(card);
+      });
+    })
+    .catch(() => {
+      document.getElementById('menuList').innerHTML =
+        '<div class="empty"><div class="e-emoji">⚠️</div><div>Gagal memuat menu.</div></div>';
+    });
+})();
+</script>
+</body>
+</html>

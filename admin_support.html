@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2f4a35">
+  <title>Matcha Cih — Racik Matcha-mu</title>
+  <meta name="description" content="Matcha Cih: racik matcha custom-mu sendiri, fresh di booth kampus. Interactive cup, taste profile, dan resep yang bisa di-share.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍵</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@600;700;800;900&display=swap">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <button class="back" onclick="location.href='admin.html'" aria-label="Kembali ke dashboard">‹</button>
+    <div class="brand"><span class="logo">💬</span> CS Admin</div>
+    <span class="spacer"></span>
+    <button class="login-chip is-user" id="loginChip" onclick="accountAction()">👤 <span id="loginLabel">admin</span></button>
+    <button class="mode-toggle" id="modeToggle" onclick="toggleViewMode()" aria-label="Ganti mode tampilan">
+      <span class="mt-ico">🖥️</span><span class="mt-label">Desktop Mode</span>
+    </button>
+  </div>
+
+  <div class="screen">
+    <div id="csRoot">
+      <div class="admin-empty"><div class="e-emoji">🔐</div><div>Memeriksa akses…</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/store-api.js"></script>
+<script src="assets/js/data.js"></script>
+<script>
+(function () {
+  let activeId = null;
+  let pollTimer = null;
+  const urlCode = new URLSearchParams(location.search).get('code') || '';
+
+  // Template jawaban cepat. {kode} akan diganti kode order bila ada.
+  const QUICK_REPLIES = [
+    'Matchanya sedang di siapkan kak',
+    'Sedang take order Matcha {kode}',
+    'Sebentar lagi yaa kak',
+    'Kak Matchanya {kode} sudah ready!',
+  ];
+
+  // Ambil kode order dari pesan user (pola "Order #CODE") atau dari URL.
+  function codeFromMessages(messages) {
+    for (const m of messages) {
+      const mt = String(m.body).match(/Order #([A-Za-z]-?\d+)/);
+      if (mt) return mt[1];
+    }
+    return urlCode || '';
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function fmt(iso) {
+    if (!iso) return '';
+    const d = new Date(String(iso).replace(' ', 'T'));
+    if (isNaN(d)) return '';
+    return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Cek akses admin.
+  fetch('api/auth.php?action=whoami')
+    .then(r => r.json())
+    .then(res => {
+      if (!res.ok || !res.user || res.user.role !== 'admin') {
+        document.getElementById('csRoot').innerHTML =
+          '<div class="admin-empty"><div class="e-emoji">🔒</div><div>Khusus admin.</div>' +
+          '<button class="btn btn-primary mt-16" onclick="location.href=\'login.html?next=admin_support.html\'">Login sebagai Admin</button></div>';
+        return;
+      }
+      document.getElementById('loginLabel').textContent = res.user.username;
+      renderShell();
+      loadThreads();
+      pollTimer = setInterval(() => { loadThreads(); if (activeId) loadThread(activeId, true); }, 5000);
+    })
+    .catch(() => {
+      document.getElementById('csRoot').innerHTML =
+        '<div class="admin-empty"><div class="e-emoji">⚠️</div><div>Gagal memeriksa akses.</div></div>';
+    });
+
+  function renderShell() {
+    document.getElementById('csRoot').innerHTML = `
+      <h1 class="title" style="font-size:22px">Customer Service</h1>
+      <p class="sub mt-8">Pesan dari pengunjung. Pilih percakapan lalu balas. Refresh otomatis tiap 5 detik.</p>
+      <div class="cs-admin mt-16">
+        <div class="cs-threads" id="csThreads"><div class="cs-empty"><div>Memuat…</div></div></div>
+        <div class="cs-panel" id="csPanel">
+          <div class="cs-empty"><div class="e-emoji">👈</div><div>Pilih percakapan di kiri.</div></div>
+        </div>
+      </div>`;
+  }
+
+  function loadThreads() {
+    fetch('api/support.php?action=list')
+      .then(r => r.json())
+      .then(res => {
+        if (!res.ok) return;
+        const wrap = document.getElementById('csThreads');
+        if (!wrap) return;
+        if (!res.threads.length) {
+          wrap.innerHTML = '<div class="cs-empty"><div>Belum ada percakapan.</div></div>';
+          return;
+        }
+        wrap.innerHTML = res.threads.map(t => `
+          <button class="cs-thread ${t.id === activeId ? 'active' : ''}" data-id="${t.id}">
+            <div class="cs-th-top">
+              <span class="cs-th-name">${esc(t.guestName)}</span>
+              <span class="cs-th-time">${esc(fmt(t.lastAt))}</span>
+            </div>
+            <div class="cs-th-last">${t.lastSender === 'admin' ? '↩︎ ' : ''}${esc(t.lastBody || '')}</div>
+          </button>`).join('');
+        wrap.querySelectorAll('.cs-thread').forEach(b => {
+          b.onclick = () => { activeId = +b.dataset.id; loadThreads(); loadThread(activeId); };
+        });
+      })
+      .catch(() => {});
+  }
+
+  function loadThread(id, keepScroll) {
+    fetch('api/support.php?action=thread&id=' + id)
+      .then(r => r.json())
+      .then(res => {
+        if (!res.ok) return;
+        renderPanel(id, res.guestName, res.messages, keepScroll);
+      })
+      .catch(() => {});
+  }
+
+  function renderPanel(id, guestName, messages, keepScroll) {
+    const panel = document.getElementById('csPanel');
+    if (!panel) return;
+    const prevScroll = keepScroll ? (panel.querySelector('.cs-msgs')?.scrollTop || 0) : null;
+
+    const bubbles = messages.map(m => `
+      <div class="cs-bubble ${m.sender === 'admin' ? 'from-admin' : 'from-user'}">
+        <div class="cs-body">${esc(m.body)}</div>
+        <div class="cs-time">${m.sender === 'admin' ? 'Admin · ' : esc(guestName) + ' · '}${esc(fmt(m.createdAt))}</div>
+      </div>`).join('');
+
+    // Kode order utk mengisi {kode} pada jawaban cepat.
+    const code = codeFromMessages(messages);
+    const quickChips = QUICK_REPLIES.map((q, i) => {
+      const text = q.replace('{kode}', code ? ('#' + code) : '').replace(/\s+/g, ' ').trim();
+      return `<button class="cs-quick" data-q="${i}" title="Isi balasan cepat">${esc(text)}</button>`;
+    }).join('');
+
+    panel.innerHTML = `
+      <div class="cs-panel-head">${esc(guestName)}</div>
+      <div class="cs-msgs" id="csMsgs">${bubbles}</div>
+      <div class="cs-quick-row">${quickChips}</div>
+      <div class="cs-reply">
+        <input type="text" id="csReplyInput" placeholder="Ketik balasan…" maxlength="500" autocomplete="off">
+        <button class="btn btn-primary" id="csReplyBtn">Kirim</button>
+      </div>`;
+
+    const msgs = document.getElementById('csMsgs');
+    if (msgs) msgs.scrollTop = (prevScroll !== null) ? prevScroll : msgs.scrollHeight;
+
+    const input = document.getElementById('csReplyInput');
+
+    // Klik jawaban cepat -> isi ke input (admin bisa edit dulu sebelum kirim).
+    panel.querySelectorAll('.cs-quick').forEach(chip => {
+      chip.onclick = () => {
+        const q = QUICK_REPLIES[+chip.dataset.q].replace('{kode}', code ? ('#' + code) : '').replace(/\s+/g, ' ').trim();
+        input.value = q;
+        input.focus();
+      };
+    });
+    const send = () => {
+      const body = input.value.trim();
+      if (!body) return;
+      input.disabled = true;
+      fetch('api/support.php?action=reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, body }),
+      })
+        .then(r => r.json())
+        .then(res => {
+          input.disabled = false;
+          if (!res.ok) { showToast(res.error || 'Gagal'); return; }
+          input.value = '';
+          renderPanel(id, guestName, res.messages, false);
+          loadThreads();
+        })
+        .catch(() => { input.disabled = false; showToast('Server tidak merespons'); });
+    };
+    document.getElementById('csReplyBtn').onclick = send;
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+    input.focus();
+  }
+})();
+</script>
+</body>
+</html>
